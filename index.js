@@ -25,39 +25,26 @@ const uiWrapper = (content) => `
         <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
         <style>
             :root { 
-                --bg: #f7f3f0; /* Soft Clay/Sand */
-                --primary: #3d3d3d; /* Soft Charcoal */
-                --accent: #5e503f; /* Deep Earthy Brown */
+                --bg: #f7f3f0; 
+                --primary: #3d3d3d; 
+                --accent: #5e503f; 
                 --muted: #a39b92; 
                 --border: #e6e0d9; 
             }
             body { background: var(--bg); color: var(--primary); font-family: 'Outfit', sans-serif; margin: 0; display: flex; justify-content: center; min-height: 100vh; }
-            .container { width: 100%; max-width: 420px; padding: 120px 24px; }
-            
+            .container { width: 100%; max-width: 420px; padding: 100px 24px; }
             h2 { font-size: 32px; font-weight: 400; letter-spacing: -0.03em; margin-bottom: 12px; color: var(--accent); }
             .desc { color: var(--muted); font-size: 15px; margin-bottom: 48px; line-height: 1.6; font-weight: 300; }
-
-            input { 
-                width: 100%; padding: 20px; background: rgba(255,255,255,0.4); border: 1px solid var(--border); 
-                border-radius: 12px; color: var(--primary); box-sizing: border-box; 
-                font-size: 16px; outline: none; transition: all 0.3s ease;
-            }
+            input { width: 100%; padding: 20px; background: rgba(255,255,255,0.4); border: 1px solid var(--border); border-radius: 12px; color: var(--primary); box-sizing: border-box; font-size: 16px; outline: none; transition: all 0.3s ease; }
             input:focus { background: #fff; border-color: var(--accent); }
-
-            button { 
-                width: 100%; padding: 18px; background: var(--accent); color: #f7f3f0; 
-                border: none; border-radius: 12px; font-weight: 500; cursor: pointer; 
-                font-size: 16px; transition: transform 0.2s ease, opacity 0.2s; margin-top: 16px;
-            }
+            button { width: 100%; padding: 18px; background: var(--accent); color: #f7f3f0; border: none; border-radius: 12px; font-weight: 500; cursor: pointer; font-size: 16px; transition: all 0.2s; margin-top: 16px; }
             button:hover { opacity: 0.95; transform: translateY(-1px); }
-
-            .results-list { margin-top: 50px; }
-            .email-row { padding: 24px 0; border-top: 1px solid var(--border); }
-            .subj { font-weight: 500; font-size: 16px; display: block; margin-bottom: 6px; color: var(--accent); }
+            .results-list { margin-top: 50px; border-top: 1px solid var(--border); }
+            .email-row { padding: 24px 0; border-bottom: 1px solid var(--border); }
+            .subj { font-weight: 500; font-size: 16px; display: block; margin-bottom: 6px; color: var(--accent); line-height: 1.4; }
             .meta { font-size: 13px; color: var(--muted); letter-spacing: 0.02em; }
-
-            .back { display: inline-block; margin-top: 48px; color: var(--muted); text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; }
-            .back:hover { color: var(--accent); }
+            .back { display: inline-block; margin-top: 48px; color: var(--muted); text-decoration: none; font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 1px solid transparent; }
+            .back:hover { color: var(--accent); border-color: var(--accent); }
         </style>
     </head>
     <body><div class="container">${content}</div></body>
@@ -66,10 +53,10 @@ const uiWrapper = (content) => `
 
 app.get('/', (req, res) => res.send(uiWrapper(`
     <h2>Correspondence</h2>
-    <p class="desc">A refined way to explore your inbox. Please enter a keyword to begin the subject-only scan.</p>
+    <p class="desc">Search your inbox strictly by subject line. This tool provides a minimalist, focused view of your mail.</p>
     <form action="/login" method="GET">
-        <input type="text" name="q" placeholder="Enter keyword..." required autofocus>
-        <button type="submit">Verify with Google</button>
+        <input type="text" name="q" placeholder="Keywords..." required autofocus>
+        <button type="submit">Verify & Search</button>
     </form>
 `)));
 
@@ -89,20 +76,26 @@ app.get('/auth/callback', async (req, res) => {
         oauth2Client.setCredentials(tokens);
         const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-        const response = await gmail.users.messages.list({ 
-            userId: 'me', q: `subject:(${req.query.state})`, maxResults: 5 
-        });
+        const query = `subject:${req.query.state}`;
+        const response = await gmail.users.messages.list({ userId: 'me', q: query, maxResults: 10 });
 
         const msgs = response.data.messages || [];
-        if (!msgs.length) return res.send(uiWrapper('<h2>Empty</h2><p class="desc">No matches found for "${req.query.state}" within your subject lines.</p><a href="/" class="back">← Back</a>'));
+        if (!msgs.length) return res.send(uiWrapper(`
+            <h2>No Matches</h2>
+            <p class="desc">We couldn't find any emails with "${req.query.state}" in the subject line.</p>
+            <a href="/" class="back">← Back</a>
+        `));
 
-        let results = `<h2>Results</h2><p class="desc">Top 5 matches for "${req.query.state}"</p><div class="results-list">`;
-        for (let m of msgs) {
+        let results = `<h2>Results</h2><p class="desc">Displaying recent subject matches for "${req.query.state}"</p><div class="results-list">`;
+        
+        // Loop through messages to get the top 5
+        for (let i = 0; i < Math.min(msgs.length, 5); i++) {
+            const m = msgs[i];
             const { data } = await gmail.users.messages.get({ 
                 userId: 'me', id: m.id, format: 'metadata', metadataHeaders: ['Subject', 'From', 'Date'] 
             });
             const h = data.payload.headers;
-            const getH = (name) => h.find(x => x.name === name)?.value || 'N/A';
+            const getH = (n) => h.find(x => x.name === n)?.value || 'N/A';
             let from = getH('From').split('<')[0].replace(/"/g, '').trim();
             
             results += `
@@ -112,7 +105,7 @@ app.get('/auth/callback', async (req, res) => {
                 </div>`;
         }
         res.send(uiWrapper(`${results}</div><a href="/" class="back">← New Inquiry</a>`));
-    } catch (e) { res.status(500).send("Unauthorized Access."); }
+    } catch (e) { res.status(500).send(uiWrapper(`<h2>Session Error</h2><p class="desc">Please try searching again.</p><a href="/" class="back">← Back</a>`)); }
 });
 
 app.listen(PORT);
