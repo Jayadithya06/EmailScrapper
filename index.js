@@ -22,39 +22,37 @@ const uiWrapper = (content) => `
     <html>
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
         <style>
-            :root { --accent: #3b82f6; --bg: #0a0a0a; --text: #f5f5f5; --muted: #737373; }
-            body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; display: flex; justify-content: center; min-height: 100vh; }
-            .container { width: 100%; max-width: 420px; padding: 80px 24px; }
+            :root { --border: #e5e7eb; --bg: #ffffff; --text: #111827; --muted: #6b7280; --accent: #2563eb; }
+            body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; margin: 0; display: flex; justify-content: center; min-height: 100vh; }
+            .container { width: 100%; max-width: 480px; padding: 100px 24px; }
             
-            .header { margin-bottom: 40px; text-align: left; }
-            h2 { font-size: 24px; font-weight: 500; letter-spacing: -0.5px; margin: 0; }
-            .tagline { color: var(--muted); font-size: 14px; margin-top: 4px; }
+            h2 { font-size: 32px; font-weight: 600; letter-spacing: -0.025em; margin-bottom: 8px; color: var(--text); }
+            .desc { color: var(--muted); font-size: 16px; margin-bottom: 48px; line-height: 1.5; }
 
+            .input-group { position: relative; margin-bottom: 12px; }
             input { 
-                width: 100%; padding: 16px; background: #171717; border: 1px solid #262626; 
-                border-radius: 12px; color: white; margin-bottom: 12px; box-sizing: border-box; 
-                font-size: 15px; outline: none; transition: border 0.2s;
+                width: 100%; padding: 16px 20px; background: #fff; border: 1.5px solid var(--border); 
+                border-radius: 12px; color: var(--text); box-sizing: border-box; 
+                font-size: 16px; outline: none; transition: all 0.2s ease;
             }
-            input:focus { border-color: var(--accent); }
+            input:focus { border-color: var(--text); }
 
             button { 
-                width: 100%; padding: 16px; background: var(--text); color: black; 
-                border: none; border-radius: 12px; font-weight: 600; cursor: pointer; 
-                font-size: 15px; transition: opacity 0.2s;
+                width: 100%; padding: 16px; background: var(--text); color: #fff; 
+                border: none; border-radius: 12px; font-weight: 500; cursor: pointer; 
+                font-size: 16px; transition: background 0.2s ease; margin-top: 8px;
             }
-            button:hover { opacity: 0.9; }
+            button:hover { background: #374151; }
 
-            .result-item { 
-                padding: 20px 0; border-bottom: 1px solid #171717; animation: fadeIn 0.5s ease forwards;
-            }
-            .subj { font-size: 15px; font-weight: 500; display: block; margin-bottom: 4px; line-height: 1.4; }
-            .meta { font-size: 12px; color: var(--muted); }
+            .result-container { margin-top: 40px; border-top: 1.5px solid var(--border); }
+            .email-row { padding: 24px 0; border-bottom: 1px solid var(--border); transition: opacity 0.3s; }
+            .subj { font-weight: 500; font-size: 16px; margin-bottom: 6px; display: block; color: var(--text); }
+            .meta { font-size: 14px; color: var(--muted); }
 
-            .back { display: block; margin-top: 40px; color: var(--muted); text-decoration: none; font-size: 13px; }
-            .back:hover { color: var(--text); }
-
-            @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+            .back { display: inline-block; margin-top: 32px; color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; }
+            .back:hover { color: var(--text); text-decoration: underline; }
         </style>
     </head>
     <body><div class="container">${content}</div></body>
@@ -62,13 +60,13 @@ const uiWrapper = (content) => `
 `;
 
 app.get('/', (req, res) => res.send(uiWrapper(`
-    <div class="header">
-        <h2>Nexus</h2>
-        <div class="tagline">Minimalist Email Intelligence</div>
-    </div>
+    <h2>Search</h2>
+    <p class="desc">Enter a keyword to filter your inbox by subject line.</p>
     <form action="/login" method="GET">
-        <input type="text" name="q" placeholder="Keyword search..." required autofocus>
-        <button type="submit">Scan Inbox</button>
+        <div class="input-group">
+            <input type="text" name="q" placeholder="Keywords..." required autofocus>
+        </div>
+        <button type="submit">Continue with Google</button>
     </form>
 `)));
 
@@ -93,23 +91,27 @@ app.get('/auth/callback', async (req, res) => {
         });
 
         const msgs = response.data.messages || [];
-        if (!msgs.length) return res.send(uiWrapper('<h2>No matches.</h2><a href="/" class="back">← Try again</a>'));
+        if (!msgs.length) return res.send(uiWrapper('<h2>No results</h2><p class="desc">We couldn\'t find any emails with that subject.</p><a href="/" class="back">← Try another keyword</a>'));
 
-        let results = `<div class="header"><h2>Search: ${req.query.state}</h2></div>`;
+        let results = `<h2>Results</h2><p class="desc">Showing top 5 matches for "${req.query.state}"</p><div class="result-container">`;
         for (let m of msgs) {
             const { data } = await gmail.users.messages.get({ 
                 userId: 'me', id: m.id, format: 'metadata', metadataHeaders: ['Subject', 'From', 'Date'] 
             });
             const h = data.payload.headers;
-            const getH = (n) => h.find(x => x.name === n)?.value || 'N/A';
+            const getH = (name) => h.find(x => x.name === name)?.value || 'N/A';
+            
+            // Clean up 'From' field to look professional
+            let from = getH('From').split('<')[0].replace(/"/g, '').trim();
+            
             results += `
-                <div class="result-item">
+                <div class="email-row">
                     <span class="subj">${getH('Subject')}</span>
-                    <div class="meta">${getH('From').split('<')[0]} • ${getH('Date').split(' ').slice(0,3).join(' ')}</div>
+                    <div class="meta">${from} • ${getH('Date').split(' ').slice(0,4).join(' ')}</div>
                 </div>`;
         }
-        res.send(uiWrapper(`${results}<a href="/" class="back">← New search</a>`));
-    } catch (e) { res.status(500).send("System Error"); }
+        res.send(uiWrapper(`${results}</div><a href="/" class="back">← Search again</a>`));
+    } catch (e) { res.status(500).send("Server Error"); }
 });
 
 app.listen(PORT);
