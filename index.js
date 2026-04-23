@@ -23,18 +23,38 @@ const uiWrapper = (content) => `
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-            body { background: #0f172a; color: #f8fafc; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; justify-content: center; min-height: 100vh; }
-            .container { width: 100%; max-width: 500px; padding: 40px 20px; }
-            .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 35px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); text-align: center; }
-            h2 { font-size: 2rem; margin-bottom: 10px; background: linear-gradient(to right, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-            p { color: #94a3b8; margin-bottom: 30px; font-size: 0.95rem; }
-            input { width: 100%; padding: 15px; background: #1e293b; border: 1px solid #334155; border-radius: 12px; color: white; margin-bottom: 20px; box-sizing: border-box; font-size: 1rem; outline: none; }
-            button { width: 100%; padding: 15px; background: #38bdf8; color: #0f172a; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.3s; }
-            button:hover { background: #7dd3fc; transform: translateY(-2px); }
-            .email-card { background: rgba(15, 23, 42, 0.5); padding: 18px; border-radius: 15px; margin-bottom: 15px; border-left: 5px solid #818cf8; text-align: left; }
-            .email-subject { font-weight: 600; color: #f1f5f9; display: block; margin-bottom: 5px; }
-            .email-meta { font-size: 0.8rem; color: #64748b; }
-            .back-btn { display: inline-block; margin-top: 20px; color: #38bdf8; text-decoration: none; }
+            :root { --accent: #3b82f6; --bg: #0a0a0a; --text: #f5f5f5; --muted: #737373; }
+            body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; display: flex; justify-content: center; min-height: 100vh; }
+            .container { width: 100%; max-width: 420px; padding: 80px 24px; }
+            
+            .header { margin-bottom: 40px; text-align: left; }
+            h2 { font-size: 24px; font-weight: 500; letter-spacing: -0.5px; margin: 0; }
+            .tagline { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+            input { 
+                width: 100%; padding: 16px; background: #171717; border: 1px solid #262626; 
+                border-radius: 12px; color: white; margin-bottom: 12px; box-sizing: border-box; 
+                font-size: 15px; outline: none; transition: border 0.2s;
+            }
+            input:focus { border-color: var(--accent); }
+
+            button { 
+                width: 100%; padding: 16px; background: var(--text); color: black; 
+                border: none; border-radius: 12px; font-weight: 600; cursor: pointer; 
+                font-size: 15px; transition: opacity 0.2s;
+            }
+            button:hover { opacity: 0.9; }
+
+            .result-item { 
+                padding: 20px 0; border-bottom: 1px solid #171717; animation: fadeIn 0.5s ease forwards;
+            }
+            .subj { font-size: 15px; font-weight: 500; display: block; margin-bottom: 4px; line-height: 1.4; }
+            .meta { font-size: 12px; color: var(--muted); }
+
+            .back { display: block; margin-top: 40px; color: var(--muted); text-decoration: none; font-size: 13px; }
+            .back:hover { color: var(--text); }
+
+            @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         </style>
     </head>
     <body><div class="container">${content}</div></body>
@@ -42,14 +62,14 @@ const uiWrapper = (content) => `
 `;
 
 app.get('/', (req, res) => res.send(uiWrapper(`
-    <div class="glass-card">
-        <h2>Inbox Pulse</h2>
-        <p>Searching strictly by Subject Line</p>
-        <form action="/login" method="GET">
-            <input type="text" name="q" placeholder="Enter subject keyword..." required>
-            <button type="submit">Search Inbox</button>
-        </form>
+    <div class="header">
+        <h2>Nexus</h2>
+        <div class="tagline">Minimalist Email Intelligence</div>
     </div>
+    <form action="/login" method="GET">
+        <input type="text" name="q" placeholder="Keyword search..." required autofocus>
+        <button type="submit">Scan Inbox</button>
+    </form>
 `)));
 
 app.get('/login', (req, res) => {
@@ -66,36 +86,30 @@ app.get('/auth/callback', async (req, res) => {
         const oauth2Client = getAuthClient(req);
         const { tokens } = await oauth2Client.getToken(req.query.code);
         oauth2Client.setCredentials(tokens);
-
         const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-        
-        // This is the FIX: It forces Google to only look at the Subject
-        const strictQuery = `subject:(${req.query.state})`;
 
         const response = await gmail.users.messages.list({ 
-            userId: 'me', 
-            q: strictQuery, 
-            maxResults: 5 
+            userId: 'me', q: `subject:(${req.query.state})`, maxResults: 5 
         });
 
         const msgs = response.data.messages || [];
-        if (!msgs.length) return res.send(uiWrapper('<div class="glass-card"><h2>No Match</h2><p>No emails found with that subject.</p><a href="/" class="back-btn">Try again</a></div>'));
+        if (!msgs.length) return res.send(uiWrapper('<h2>No matches.</h2><a href="/" class="back">← Try again</a>'));
 
-        let results = `<h2>Subject: ${req.query.state}</h2><div style="margin-top:20px;">`;
+        let results = `<div class="header"><h2>Search: ${req.query.state}</h2></div>`;
         for (let m of msgs) {
             const { data } = await gmail.users.messages.get({ 
                 userId: 'me', id: m.id, format: 'metadata', metadataHeaders: ['Subject', 'From', 'Date'] 
             });
             const h = data.payload.headers;
-            const getH = (n) => h.find(x => x.name === n)?.value || 'Unknown';
+            const getH = (n) => h.find(x => x.name === n)?.value || 'N/A';
             results += `
-                <div class="email-card">
-                    <span class="email-subject">${getH('Subject')}</span>
-                    <div class="email-meta">From: ${getH('From')}<br>${getH('Date')}</div>
+                <div class="result-item">
+                    <span class="subj">${getH('Subject')}</span>
+                    <div class="meta">${getH('From').split('<')[0]} • ${getH('Date').split(' ').slice(0,3).join(' ')}</div>
                 </div>`;
         }
-        res.send(uiWrapper(`<div class="glass-card">${results}</div><a href="/" class="back-btn">← New Search</a></div>`));
-    } catch (e) { res.status(500).send("Error"); }
+        res.send(uiWrapper(`${results}<a href="/" class="back">← New search</a>`));
+    } catch (e) { res.status(500).send("System Error"); }
 });
 
 app.listen(PORT);
